@@ -6,44 +6,33 @@
 
 # ENV
 set -e
-NAME="$(basename "$0")"
-package_list='base linux linux-firmware vim networkmanager grub bash-completion'
-keyboard_layout=
-want_clean_drive=
-want_encryption=
-drive_name=
-boot_size=
-swap_size=
-timezone_region=
-timezone_city=
-locale=en_US.UTF-8
-hostname=
+keyboard_layout=''
+timezone=''
+hostname=''
+disk_path=''
+filesystem=''
+boot_loader=''
+clean_disk=''
+encrypt_disk=''
 
-final_commands(){
-	echo 'Final commands..'
-	# Place your final commands here.
-	# For Example: KDE environment
-	#
-	#pacman -S xf86-video-intel xorg xorg-xinit plasma lightdm lightdm-gtk-greeter
-	#systemctl enable lightdm
-	#
-	# Don't leave the function empty!
-}
+locale='en_US.UTF-8'
+package_list='base linux linux-firmware networkmanager'
+mkinitcpio_hooks='base udev keyboard autodetect modconf kms keymap consolefont block encrypt filesystems fsck'
 
 print_error(){
-	message="$1"
-	echo "${NAME} - Error: ${message}" >&2
+	message="${1}"
+	printf '%s\n' "Error: ${message}" >&2
 }
 
 ask_yes_no(){
-	answer="$1"
-	question="$2"
-	while ! printf '%s' "$answer" | grep -q '^\([Yy]\(es\)\?\|[Nn]\(o\)\?\)$'; do
+	answer="${1}"
+	question="${2}"
+	while ! printf '%s' "${answer}" | grep -q '^\([Yy]\(es\)\?\|[Nn]\(o\)\?\)$'; do
 		printf '%s' "${question} [Y]es/[N]o: "
 		read -r answer
 	done
 
-	if printf '%s' "$answer" | grep -q '^[Nn]\(o\)\?$'; then
+	if printf '%s' "${answer}" | grep -q '^[Nn]\(o\)\?$'; then
 		return 1
 	fi
 }
@@ -51,327 +40,446 @@ ask_yes_no(){
 check_root(){
 	if [ "$(id -u)" -ne '0' ]; then
 		print_error 'This script needs root privileges.'
-		exit 1
+		return 1
+	fi
+}
+
+get_bios_mode(){
+	if [ ! -d /sys/firmware/efi/efivars ]; then
+		bios_mode='legacy'
+		return
+	fi
+
+	bios_mode='uefi'
+}
+
+get_cpu_architecture(){
+	if ! grep --quiet '\slm\s' /proc/cpuinfo; then
+		cpu_architecture='i386'
+		return
+	fi
+
+	cpu_architecture='x86_64'
+}
+
+get_cpu_model(){
+	if ! grep --quiet 'Intel' /proc/cpuinfo; then
+		cpu_model='amd'
+		return
+	fi
+
+	cpu_model='intel'
+}
+
+get_keyboard_layout(){
+	while [ -z "${keyboard_layout}" ]; do
+		printf 'Enter the desired keyboard layout (e.g., us): '
+		read -r keyboard_layout
+	done
+
+	if ! loadkeys --quiet --parse "${keyboard_layout}"; then
+		print_error 'Keyboard layout not found'
+		keyboard_layout=''
+		get_keyboard_layout
+	fi
+}
+
+get_timezone(){
+	while [ -z "${timezone}" ]; do
+		printf 'Enter the name of your timezone (e.g., Europe/Berlin): '
+		read -r timezone
+	done
+
+	if [ ! -f /usr/share/zoneinfo/"${timezone}" ]; then
+		print_error "The specified timezone was not found."
+		timezone=''
+		get_timezone
+	fi
+}
+
+get_hostname(){
+	while [ -z "${hostname}" ]; do
+		printf 'Enter hostname: '
+		read -r hostname
+	done
+}
+
+get_disk_path(){
+	while [ -z "${disk_path}" ]; do
+		lsblk --noheadings --nodeps --output 'PATH'
+		printf 'Enter the path of the desired disk to be affected (e.g., /dev/sda): '
+		read -r disk_path
+	done
+
+	if ! [ -b "${disk_path}" ]; then
+		print_error 'Disk not found.'
+		disk_path=''
+		get_disk_path
+	fi
+}
+
+get_filesystem(){
+	options=$(\
+	cat <<-EOF
+		ext4
+		btrfs
+		f2fs
+	EOF
+	)
+
+	while ! printf '%s' "${options}" | grep -q "^${filesystem}$"; do
+		printf '%s\n' "${options}"
+		printf '%s' 'Choose filesystems: '
+		read -r filesystem
+	done
+}
+
+get_boot_loader(){
+	options=$(\
+	cat <<-EOF
+		systemd-boot
+		grub
+	EOF
+	)
+
+	while ! printf '%s' "${options}" | grep -q "^${boot_loader}$"; do
+		printf '%s\n' "${options}"
+		printf '%s' 'Choose boot method: '
+		read -r boot_loader
+	done
+}
+
+ask_clean_disk(){
+	if !	ask_yes_no "${clean_disk}" 'Do you want to clean the disk? This may take a long time.'; then
+		clean_disk='false'
+		return
+	fi
+
+	clean_disk='true'
+}
+
+ask_encrypt_disk(){
+	if ! ask_yes_no "${encrypt_disk}" 'Do you want encryption?'; then
+		encrypt_disk='false'
+		return
+	fi
+
+	encrypt_disk='true'
+}
+
+get_root_password(){
+	while [ -z "${root_password}" ]; do
+		printf 'Enter root password: '
+		read -r root_password
+	done
+
+	while [ -z "${root_confirm_password}" ]; do
+		printf 'Confirm root password: '
+		read -r root_confirm_password
+	done
+
+	if [ "${root_password}" != "${root_confirm_password}" ]; then
+		print_error 'Password did not match.'
+		root_password=''
+		root_confirm_password=''
+		get_root_password
+	fi
+}
+
+get_encryption_password(){
+	if ! "${encrypt_disk}"; then
+		return
+	fi
+
+	while [ -z "${encryption_password}" ]; do
+		printf 'Enter encryption password: '
+		read -r encryption_password
+	done
+
+	while [ -z "${encryption_confirm_password}" ]; do
+		printf 'Confirm encryption password: '
+		read -r encryption_confirm_password
+	done
+
+	if [ "${encryption_password}" != "${encryption_confirm_password}" ]; then
+		print_error 'Password did not match.'
+		encryption_password=''
+		encryption_confirm_password=''
+		get_encryption_password
 	fi
 }
 
 set_keyboard_layout(){
-	if [ -z "$keyboard_layout" ]; then
-		printf 'Enter the keyboard layout name, or press enter for the default layout (us): '
-		read -r keyboard_layout
-
-		if [ -z "$keyboard_layout" ]; then
-			keyboard_layout='us'
-		fi
-	fi
-
-	if ls /usr/share/kbd/keymaps/**/*"$keyboard_layout"*.map.gz >/dev/null 2>&1; then
-		loadkeys "$keyboard_layout"
-	else
-		print_error "Keyboard layout not found"
-		keyboard_layout=
-		set_keyboard_layout
-	fi
-}
-
-verify_boot_mode(){
-	if [ -d /sys/firmware/efi/efivars ]; then
-		boot_mode='uefi'
-	else
-		boot_mode='bios'
-	fi
+	loadkeys "${keyboard_layout}"
 }
 
 update_system_clock(){
-	timedatectl set-ntp true >/dev/null 2>&1
+	timedatectl set-ntp true
 }
 
-get_drive_name(){
-	drive_list="$(lsblk -d | tail +2 | sed -n 's/^\(\S*\).*$/\1/p' | nl)"
-	if [ -z "$drive_name" ]; then
-		drive_number=
-		while [ -z "$drive_number" ]; do
-			printf "$drive_list\n"
-			printf 'Enter the number of the desired drive to be affected: '
-			read -r drive_number
-			drive_name="$(printf "$drive_list" | sed -n 's/^\s*'"$drive_number"'\s*\(.*\)$/\1/p')"
-		done
-	fi
-
-	if ! [ -b /dev/"$drive_name" ]; then
-		print_error "Drive \"${drive_name}\" not found."
-		drive_name=
-		get_drive_name
-	fi
+unmount_disk(){
+	umount -R /mnt || true
+	cryptsetup close root || true
 }
 
-get_partition_path(){
-	boot_path="$(blkid | grep "/dev/${drive_name}.*1" | sed -n 's/^\(\/dev\/'"$drive_name"'.*1\):\s\+.*$/\1/p')"
-	swap_path="$(blkid | grep "/dev/${drive_name}.*2" | sed -n 's/^\(\/dev\/'"$drive_name"'.*2\):\s\+.*$/\1/p')"
-	root_path="$(blkid | grep "/dev/${drive_name}.*3" | sed -n 's/^\(\/dev\/'"$drive_name"'.*3\):\s\+.*$/\1/p')"
+clean_disk(){
+	if ! "${clean_disk}"; then
+		return
+	fi
+
+	dd if=/dev/urandom > "${disk_path}" bs=4096 status=progress || true
 }
 
-get_partition_uuid(){
-	root_uuid="$(blkid | grep "$root_path" | sed -n 's/^.*\s\+UUID="\(\S*\)".*$/\1/p')"
-	swap_uuid="$(blkid | grep "$swap_path" | sed -n 's/^.*\s\+UUID="\(\S*\)".*$/\1/p')"
+partition_disk(){
+	case "${bios_mode}" in
+		'legacy')
+			sfdisk --wipe-partitions always "${disk_path}" <<- EOF
+				label: dos
+				size=1G, type=linux, bootable
+				type=linux
+			EOF
+			;;
+		'uefi')
+			sfdisk --wipe-partitions always "${disk_path}" <<- EOF
+				label: gpt
+				size=1G, type=uefi, bootable
+				type=linux
+			EOF
+			;;
+	esac
+
+	boot_path="$(lsblk "${disk_path}"?1 --list --noheadings --nodeps --output 'PATH')"
+	root_path="$(lsblk "${disk_path}"?2 --list --noheadings --nodeps --output 'PATH')"
+	root_path_pre_encryption="${root_path}"
 }
 
-clean_drive(){
-	set +e
-	dd if=/dev/urandom > /dev/"$drive_name" bs=4096 status=progress
-	set -e
+encrypt_disk(){
+	if ! "${encrypt_disk}"; then
+		return
+	fi
+
+	printf '%s' "${encryption_password}" | cryptsetup --batch-mode luksFormat "${root_path}" -
+	printf '%s' "${encryption_password}" | cryptsetup open "${root_path}" root -
+
+	root_path='/dev/mapper/root'
 }
 
-encrypt_drive(){
-	set +e
-	cryptsetup -y -v -q luksFormat "$root_path"
-	if [ "$?" -eq 0 ]; then
-		cryptsetup open "$root_path" croot
-	else
-		encrypt_drive
-	fi
-	set -e
+format_disk(){
+	mkfs.fat -F32 "${boot_path}"
+
+	case "${filesystem}" in
+		'ext4')
+			mkfs.ext4 "${root_path}"
+			;;
+		'btrfs')
+			mkfs.btrfs "${root_path}"
+			root_mount_options='compress-force=zstd:6'
+			;;
+		'f2fs')
+			mkfs.f2fs "${root_path}"
+			root_mount_options='compress_algorithm=zstd:6,compress_chksum,lazytime'
+			;;
+	esac
 }
 
-partion_disk(){
-	get_drive_name
-
-	if	ask_yes_no "$want_clean_drive" 'Do you want to clean the drive? This may take a long time.'; then
-		want_clean_drive='yes'
-		clean_drive
-	else
-		want_clean_drive='no'
-	fi
-
-	while ! [ "$boot_size" -ge 0 ] 2> /dev/null; do
-		printf 'Enter boot partition size in MiB (e.g. 512):'
-		read -r boot_size
-	done
-
-	while ! [ "$swap_size" -ge 0 ] 2> /dev/null; do
-		printf 'Enter swap partition size in MiB (e.g. 4096):'
-		read -r swap_size
-	done
-
-	if [ "$boot_mode" = 'uefi' ]; then
-		sfdisk -W always /dev/"$drive_name" <<- EOF
-			label: gpt
-			size=${boot_size}MiB, type=uefi, bootable
-			size="$swap_size"MiB, type=swap
-			type=linux
-		EOF
-	else
-		sfdisk -W always /dev/"$drive_name" <<- EOF
-			label: dos
-			size=${boot_size}MiB, type=linux, bootable
-			size=${swap_size}MiB, type=swap
-			type=linux
-		EOF
-	fi
-
-	get_partition_path
-
-	if ask_yes_no "$want_encryption" 'Do you want encryption?'; then
-		want_encryption='yes'
-		encrypt_drive
-	else
-		want_encryption='no'
-	fi
-}
-
-format_partition(){
-	if ask_yes_no "$want_encryption"; then
-		mkfs.ext4 /dev/mapper/croot
-		mkfs.ext2 -L cswap "$swap_path" 1M
-	else
-		mkfs.ext4 "$root_path"
-		mkswap "$swap_path"
-	fi
-
-	if [ "$boot_mode" = 'uefi' ]; then
-		mkfs.fat -F32 "$boot_path"
-	else
-		mkfs.ext4 "$boot_path"
-	fi
-}
-
-mount_file_system(){
-	if ask_yes_no "$want_encryption"; then
-		mount /dev/mapper/croot /mnt
-	else
-		mount "$root_path" /mnt
-		swapon "$swap_path"
-	fi
+mount_disk(){
+	mount --options "${root_mount_options}" "${root_path}" /mnt
 	mkdir /mnt/boot
-	mount "$boot_path" /mnt/boot
+	mount "${boot_path}" /mnt/boot
 }
 
 install_essential_packages(){
-	pacstrap /mnt $package_list
+	/bin/sh -c "pacstrap -K /mnt ${package_list}"
+}
+
+get_uuid(){
+	root_uuid="$(lsblk "${root_path}" --list --noheadings --nodeps --output 'UUID')"
+	root_uuid_pre_encryption="$(lsblk "${root_path_pre_encryption}" --list --noheadings --nodeps --output 'UUID')"
 }
 
 generate_fstab(){
 	genfstab -U /mnt >> /mnt/etc/fstab
-	if ask_yes_no "$want_encryption"; then
-		echo '/dev/mapper/swap        none            swap            defaults   0   0' >> /mnt/etc/fstab
-	fi
-}
 
-copy_script_to_chroot(){
-	cp "$0" /mnt/root/script.sh
-	cat <<-EOF > /mnt/root/env.sh
-	export keyboard_layout=${keyboard_layout}
-	export boot_mode=${boot_mode}
-	export drive_name=${drive_name}
-	export boot_size=${boot_size}
-	export swap_size=${swap_size}
-	export timezone_region=${timezone_region}
-	export timezone_city=${timezone_city}
-	export locale=${locale}
-	export hostname=${hostname}
-	export want_encryption=${want_encryption}
+	cat <<- EOF >> /mnt/etc/fstab
+
+		# /dev/hugepages
+		hugetlbfs       /dev/hugepages  hugetlbfs       mode=01770,gid=kvm        0 0
 	EOF
-	chmod 700 /mnt/root/script.sh
 }
 
-run_arch_chroot(){
-	arch-chroot /mnt /bin/sh -c '/root/script.sh 'part2''
+set_timezone(){
+	arch-chroot /mnt /bin/sh -c "ln -sf /usr/share/zoneinfo/${timezone} /etc/localtime"
+}
+
+set_hardware_clock(){
+	arch-chroot /mnt /bin/sh -c 'hwclock --systohc'
+}
+
+set_locale(){
+	printf '%s' "${locale}" > /mnt/etc/locale.gen
+	arch-chroot /mnt /bin/sh -c 'locale-gen'
+	printf '%s' "LANG=${locale}" > /mnt/etc/locale.conf
+}
+
+set_vconsole(){
+	printf '%s' "KEYMAP=${keyboard_layout}" > /mnt/etc/vconsole.conf
+}
+
+configure_network(){
+	printf '%s' "${hostname}" > /mnt/etc/hostname
+
+	cat <<- EOF > /mnt/etc/hosts
+		127.0.0.1	localhost
+		::1	localhost
+		127.0.1.1	${hostname}
+	EOF
+}
+
+set_root_password(){
+	arch-chroot /mnt /bin/sh -c "printf '%s' 'root:${root_password}' | chpasswd"
+}
+
+configure_grub_install_target(){
+	case "${cpu_architecture}" in
+		'i386')
+			grub_architecture='i386'
+			;;
+		'x86_64')
+			grub_architecture='x86_64'
+			;;
+	esac
+
+	case "${bios_mode}" in
+		'legacy')
+			grub_install_target='i386-pc'
+			grub_packages='grub'
+			;;
+		'uefi')
+			grub_install_target="${grub_architecture}-efi"
+			grub_install_options='--efi-directory=/boot --bootloader-id=GRUB'
+			grub_packages='grub efibootmgr'
+			;;
+	esac
+}
+
+configure_boot_loader_encryption(){
+	if ! "${encrypt_disk}"; then
+		return
+	fi
+
+	boot_options_encryption="cryptdevice=UUID=${root_uuid_pre_encryption}:root"
+}
+
+run_initramfs(){
+	cat <<- EOF > /mnt/etc/mkinitcpio.conf
+		MODULES=()
+		BINARIES=()
+		FILES=()
+		HOOKS=(${mkinitcpio_hooks})
+	EOF
+
+	arch-chroot /mnt /bin/sh -c 'mkinitcpio -P || true'
+}
+
+install_boot_loader(){
+	case "${cpu_model}" in
+		'intel')
+			arch-chroot /mnt /bin/sh -c 'pacman -Sy --noconfirm intel-ucode'
+			systemd_boot_microcode='/intel-ucode.img'
+			;;
+		'amd')
+			arch-chroot /mnt /bin/sh -c 'pacman -Sy --noconfirm amd-ucode'
+			systemd_boot_microcode='/amd-ucode.img'
+			;;
+	esac
+
+	case "${boot_loader}" in
+		'systemd-boot')
+			arch-chroot /mnt /bin/sh -c 'bootctl install'
+
+			cat <<- EOF > /mnt/boot/loader/loader.conf
+				default arch.conf
+				timeout 0
+				console-mode max
+			EOF
+
+			cat <<- EOF > /mnt/boot/loader/entries/arch.conf
+				title	Arch Linux
+				linux	/vmlinuz-linux
+				initrd	${systemd_boot_microcode}
+				initrd	/initramfs-linux.img
+				options	${boot_options_encryption} root=UUID=${root_uuid} rw
+				options	quiet splash
+				options	sysrq_always_enabled=1
+			EOF
+			;;
+		'grub')
+			arch-chroot /mnt /bin/sh -c "pacman -Sy --noconfirm ${grub_packages}"
+
+			cat <<- EOF > /mnt/etc/default/grub
+				GRUB_DEFAULT=0
+				GRUB_TIMEOUT=1
+				GRUB_DISTRIBUTOR="Arch"
+				GRUB_CMDLINE_LINUX_DEFAULT="quiet splash sysrq_always_enabled=1 ${boot_options_encryption} root=UUID=${root_uuid} rw"
+				GRUB_PRELOAD_MODULES="part_gpt part_msdos"
+				GRUB_TIMEOUT_STYLE=menu
+				GRUB_TERMINAL_INPUT=console
+				GRUB_GFXMODE=auto
+				GRUB_GFXPAYLOAD_LINUX=keep
+				GRUB_DISABLE_RECOVERY=true
+			EOF
+
+			arch-chroot /mnt /bin/sh -c "grub-install --target=${grub_install_target} ${grub_install_options} ${disk_path}"
+			arch-chroot /mnt /bin/sh -c "grub-mkconfig --output /boot/grub/grub.cfg"
+			;;
+	esac
 }
 
 finish_and_reboot(){
 	umount -R /mnt
-	echo 'Rebooting in 5Sec'
+	printf '%s' 'Rebooting system in 5 seconds...'
 	sleep 5
 	reboot
 }
 
-source_env(){
-	. /root/env.sh
-}
+main(){
+	check_root
+	get_bios_mode
+	get_cpu_architecture
+	get_cpu_model
+	get_keyboard_layout
+	get_timezone
+	get_hostname
+	get_disk_path
+	get_filesystem
+	get_boot_loader
+	ask_clean_disk
+	ask_encrypt_disk
+	get_root_password
+	get_encryption_password
 
-set_time_zone(){
-	while [ -z "$timezone_region" ] || [ -z "$timezone_city" ]; do
-		printf 'Enter the name of your Region (e.g., Europe): '
-		read -r timezone_region
-		printf 'Enter the timezone name of your city (e.g., Berlin): '
-		read -r timezone_city
-	done
-
-	if [ -f /usr/share/zoneinfo/"$timezone_region"/"$timezone_city" ]; then
-		ln -sf /usr/share/zoneinfo/"$timezone_region"/"$timezone_city" /etc/localtime
-	else
-		print_error "The specified Region, and/or city were not found."
-		timezone_region=
-		timezone_city=
-		set_time_zone
-	fi
-}
-
-set_hardware_clock(){
-	hwclock --systohc
-}
-
-set_locale(){
-	sed -i '0,/^\s*#\+\s*\('"$locale"'.*\)$/ s/^\s*#\+\s*\('"$locale"'.*\)$/\1/' /etc/locale.gen
-	locale-gen
-	echo "LANG=${locale}" > /etc/locale.conf
-}
-
-set_vconsole(){
-	echo "KEYMAP=${keyboard_layout}" > /etc/vconsole.conf
-}
-
-configure_network(){
-	while [ -z "$hostname" ]; do
-		printf 'Enter hostname: '
-		read -r hostname
-	done
-
-	echo "$hostname" > /etc/hostname
-
-	cat <<- EOF > /etc/hosts
-	127.0.0.1	localhost
-	::1		localhost
-	127.0.1.1	"${hostname}".localdomain	"${hostname}"
-	EOF
-}
-
-install_boot_loader(){
-	if [ "$boot_mode" = 'uefi' ]; then
-		# grub-install --target=x86_64-efi --efi-directory=/boot/EFI --bootloader-id=GRUB
-		bootctl install
-		cp /usr/share/systemd/bootctl/arch.conf /boot/loader/entries/
-		echo 'default arch.conf' > /boot/loader/loader.conf
-		sed -i 's/^\s*options.*$/options root=UUID='"$root_uuid"' rw/' /boot/loader/entries/arch.conf
-	else
-		grub-install --target=i386-pc /dev/"$drive_name"
-		grub-mkconfig -o /boot/grub/grub.cfg
-	fi
-}
-
-configure_boot_loader(){
-	if ask_yes_no "$want_encryption"; then
-		echo "swap      UUID=${swap_uuid}    /dev/urandom swap,offset=2048,cipher=aes-xts-plain64,size=512" >> /etc/crypttab
-		if [ "$boot_mode" = 'uefi' ]; then
-			sed -i 's/^\s*HOOKS=.*$/HOOKS=(base systemd autodetect keyboard sd-vconsole modconf block sd-encrypt filesystems fsck)/' /etc/mkinitcpio.conf
-			sed -i 's/^\s*options.*$/options rd\.luks\.name='"$root_uuid"'=croot root=\/dev\/mapper\/croot/' /boot/loader/entries/arch.conf
-		else
-			sed -i 's/^\s*HOOKS=.*$/HOOKS=(base udev autodetect keyboard keymap consolefont modconf block encrypt filesystems fsck)/' /etc/mkinitcpio.conf
-			sed -i 's/^\s*GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"$/GRUB_CMDLINE_LINUX_DEFAULT="\1 cryptdevice=UUID='"$root_uuid"':croot root=\/dev\/mapper\/croot"/' /etc/default/grub
-			grub-mkconfig -o /boot/grub/grub.cfg
-		fi
-	fi
-}
-
-setup_initramfs(){
-	mkinitcpio -P
-}
-
-change_root_password(){
-	set +e
-	echo 'Change root password..'
-	passwd
-	set -e
-}
-
-run_part2(){
-	source_env
-	set_time_zone
+	set_keyboard_layout
+	update_system_clock
+	unmount_disk
+	clean_disk
+	partition_disk
+	encrypt_disk
+	format_disk
+	mount_disk
+	install_essential_packages
+	get_uuid
+	generate_fstab
+	set_timezone
 	set_hardware_clock
 	set_locale
 	set_vconsole
 	configure_network
-	get_partition_path
-	get_partition_uuid
+	set_root_password
+	configure_grub_install_target
+	configure_boot_loader_encryption
+	run_initramfs
 	install_boot_loader
-	configure_boot_loader
-	setup_initramfs
-	change_root_password
-	set +e; final_commands; set-e
-	exit
-}
-
-run_part1(){
-	check_root
-	set_keyboard_layout
-	verify_boot_mode
-	update_system_clock
-	partion_disk
-	format_partition
-	mount_file_system
-	install_essential_packages
-	generate_fstab
-	copy_script_to_chroot
-	run_arch_chroot
 	finish_and_reboot
-}
-
-main(){
-	if [ "$1" = 'part2' ];then
-		run_part2 "$@"
-	else
-		run_part1 "$@"
-	fi
 }
 
 main "$@"
