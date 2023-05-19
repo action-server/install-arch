@@ -16,6 +16,7 @@ clean_disk=''
 encrypt_disk=''
 
 locale='en_US.UTF-8'
+locale_gen='en_US.UTF-8 UTF-8'
 package_list='base linux linux-firmware networkmanager'
 mkinitcpio_hooks='base udev keyboard autodetect modconf kms keymap consolefont block encrypt filesystems fsck'
 
@@ -316,7 +317,7 @@ set_hardware_clock(){
 }
 
 set_locale(){
-	printf '%s' "${locale}" > /mnt/etc/locale.gen
+	printf '%s' "${locale_gen}" > /mnt/etc/locale.gen
 	arch-chroot /mnt /bin/sh -c 'locale-gen'
 	printf '%s' "LANG=${locale}" > /mnt/etc/locale.conf
 }
