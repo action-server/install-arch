@@ -249,8 +249,8 @@ partition_disk(){
 			;;
 	esac
 
-	boot_path="$(lsblk "${disk_path}"?1 --list --noheadings --nodeps --output 'PATH')"
-	root_path="$(lsblk "${disk_path}"?2 --list --noheadings --nodeps --output 'PATH')"
+	boot_path="$(lsblk "${disk_path}"*1 --list --noheadings --nodeps --output 'PATH')"
+	root_path="$(lsblk "${disk_path}"*2 --list --noheadings --nodeps --output 'PATH')"
 	root_path_pre_encryption="${root_path}"
 }
 
