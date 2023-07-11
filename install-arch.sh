@@ -4,8 +4,10 @@
 # License:      GNU GPLv3
 # Description:  Arch install script
 
-# ENV
 set -e
+
+trap 'cleanup' EXIT INT QUIT TERM HUP
+
 keyboard_layout=''
 timezone=''
 hostname=''
@@ -23,6 +25,12 @@ mkinitcpio_hooks='base udev keyboard autodetect modconf kms keymap consolefont b
 print_error(){
 	message="${1}"
 	printf '%s\n' "Error: ${message}" >&2
+}
+
+cleanup(){
+	print_error 'Unexpected exit...'
+	stty echo
+	set e
 }
 
 ask_yes_no(){
@@ -171,12 +179,18 @@ ask_encrypt_disk(){
 get_root_password(){
 	while [ -z "${root_password}" ]; do
 		printf 'Enter root password: '
+		stty -echo
 		read -r root_password
+		stty echo
+		printf '\n'
 	done
 
 	while [ -z "${root_confirm_password}" ]; do
 		printf 'Confirm root password: '
+		stty -echo
 		read -r root_confirm_password
+		stty echo
+		printf '\n'
 	done
 
 	if [ "${root_password}" != "${root_confirm_password}" ]; then
@@ -194,12 +208,18 @@ get_encryption_password(){
 
 	while [ -z "${encryption_password}" ]; do
 		printf 'Enter encryption password: '
+		stty -echo
 		read -r encryption_password
+		stty echo
+		printf '\n'
 	done
 
 	while [ -z "${encryption_confirm_password}" ]; do
 		printf 'Confirm encryption password: '
+		stty -echo
 		read -r encryption_confirm_password
+		stty echo
+		printf '\n'
 	done
 
 	if [ "${encryption_password}" != "${encryption_confirm_password}" ]; then
