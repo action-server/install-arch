@@ -84,26 +84,24 @@ get_keyboard_layout(){
 	while [ -z "${keyboard_layout}" ]; do
 		printf 'Enter the desired keyboard layout (e.g., us): '
 		read -r keyboard_layout
-	done
 
-	if ! loadkeys --quiet --parse "${keyboard_layout}"; then
-		print_error 'Keyboard layout not found'
-		keyboard_layout=''
-		get_keyboard_layout
-	fi
+		if ! loadkeys --quiet --parse "${keyboard_layout}"; then
+			print_error 'Keyboard layout not found'
+			keyboard_layout=''
+		fi
+	done
 }
 
 get_timezone(){
 	while [ -z "${timezone}" ]; do
 		printf 'Enter the name of your timezone (e.g., Europe/Berlin): '
 		read -r timezone
-	done
 
-	if [ ! -f /usr/share/zoneinfo/"${timezone}" ]; then
-		print_error "The specified timezone was not found."
-		timezone=''
-		get_timezone
-	fi
+		if [ ! -f /usr/share/zoneinfo/"${timezone}" ]; then
+			print_error "The specified timezone was not found."
+			timezone=''
+		fi
+	done
 }
 
 get_hostname(){
@@ -118,13 +116,12 @@ get_disk_path(){
 		lsblk --noheadings --nodeps --output 'PATH'
 		printf 'Enter the path of the desired disk to be affected (e.g., /dev/sda): '
 		read -r disk_path
-	done
 
-	if ! [ -b "${disk_path}" ]; then
-		print_error 'Disk not found.'
-		disk_path=''
-		get_disk_path
-	fi
+		if ! [ -b "${disk_path}" ]; then
+			print_error 'Disk not found.'
+			disk_path=''
+		fi
+	done
 }
 
 get_filesystem(){
@@ -159,7 +156,7 @@ get_boot_loader(){
 }
 
 ask_clean_disk(){
-	if !	ask_yes_no "${clean_disk}" 'Do you want to clean the disk? This may take a long time.'; then
+	if ! ask_yes_no "${clean_disk}" 'Do you want to clean the disk? This may take a long time.'; then
 		clean_disk='false'
 		return
 	fi
@@ -183,22 +180,24 @@ get_root_password(){
 		read -r root_password
 		stty echo
 		printf '\n'
-	done
 
-	while [ -z "${root_confirm_password}" ]; do
+		if [ -z "${root_password}" ]; then
+			print_error 'Password cannot be empty.'
+			continue
+		fi
+
 		printf 'Confirm root password: '
 		stty -echo
 		read -r root_confirm_password
 		stty echo
 		printf '\n'
-	done
 
-	if [ "${root_password}" != "${root_confirm_password}" ]; then
-		print_error 'Password did not match.'
-		root_password=''
-		root_confirm_password=''
-		get_root_password
-	fi
+		if [ "${root_password}" != "${root_confirm_password}" ]; then
+			print_error 'Password did not match.'
+			root_password=''
+			root_confirm_password=''
+		fi
+	done
 }
 
 get_encryption_password(){
@@ -212,22 +211,24 @@ get_encryption_password(){
 		read -r encryption_password
 		stty echo
 		printf '\n'
-	done
 
-	while [ -z "${encryption_confirm_password}" ]; do
+		if [ -z "${encryption_password}" ]; then
+			print_error 'Encryption password cannot be empty.'
+			continue
+		fi
+
 		printf 'Confirm encryption password: '
 		stty -echo
 		read -r encryption_confirm_password
 		stty echo
 		printf '\n'
-	done
 
-	if [ "${encryption_password}" != "${encryption_confirm_password}" ]; then
-		print_error 'Password did not match.'
-		encryption_password=''
-		encryption_confirm_password=''
-		get_encryption_password
-	fi
+		if [ "${encryption_password}" != "${encryption_confirm_password}" ]; then
+			print_error 'Password did not match.'
+			encryption_password=''
+			encryption_confirm_password=''
+		fi
+	done
 }
 
 set_keyboard_layout(){
