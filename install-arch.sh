@@ -251,6 +251,7 @@ update_system_clock(){
 
 unmount_disk(){
 	umount -R /mnt || true
+	vgremove --yes vg1 || true
 	cryptsetup close root || true
 }
 
@@ -280,8 +281,8 @@ partition_disk(){
 			;;
 	esac
 
-	boot_path="$(lsblk "${disk_path}"*1 --list --noheadings --nodeps --output 'PATH')"
-	root_path="$(lsblk "${disk_path}"*2 --list --noheadings --nodeps --output 'PATH')"
+	boot_path="$(lsblk "${disk_path}"*1 --list --noheadings --nodeps --output 'PATH' | head -1)"
+	root_path="$(lsblk "${disk_path}"*2 --list --noheadings --nodeps --output 'PATH' | head -1)"
 }
 
 encrypt_disk(){
