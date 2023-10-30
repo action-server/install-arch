@@ -8,20 +8,6 @@ set -e
 
 trap 'cleanup' EXIT INT QUIT TERM HUP
 
-keyboard_layout=''
-timezone=''
-hostname=''
-disk_path=''
-filesystem=''
-boot_loader=''
-clean_disk=''
-encrypt_disk=''
-
-locale='en_US.UTF-8'
-locale_gen='en_US.UTF-8 UTF-8'
-package_list='base linux linux-firmware networkmanager'
-mkinitcpio_hooks='base udev keyboard autodetect modconf kms keymap consolefont block encrypt filesystems fsck'
-
 print_error(){
 	message="${1}"
 	printf '%s\n' "Error: ${message}" >&2
