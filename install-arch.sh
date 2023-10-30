@@ -165,6 +165,15 @@ ask_clean_disk(){
 	clean_disk='true'
 }
 
+ask_setup_lvm(){
+	if ! ask_yes_no "${setup_lvm}" 'Do you want to setup lvm?'; then
+		setup_lvm='false'
+		return
+	fi
+
+	setup_lvm='true'
+}
+
 ask_encrypt_disk(){
 	if ! ask_yes_no "${encrypt_disk}" 'Do you want encryption?'; then
 		encrypt_disk='false'
@@ -273,7 +282,6 @@ partition_disk(){
 
 	boot_path="$(lsblk "${disk_path}"*1 --list --noheadings --nodeps --output 'PATH')"
 	root_path="$(lsblk "${disk_path}"*2 --list --noheadings --nodeps --output 'PATH')"
-	root_path_pre_encryption="${root_path}"
 }
 
 encrypt_disk(){
@@ -284,7 +292,16 @@ encrypt_disk(){
 	printf '%s' "${encryption_password}" | cryptsetup --batch-mode luksFormat "${root_path}" -
 	printf '%s' "${encryption_password}" | cryptsetup open "${root_path}" root -
 
+	encryption_root_path="${root_path}"
 	root_path='/dev/mapper/root'
+}
+
+setup_lvm(){
+	pvcreate "${root_path}"
+	vgcreate 'vg1' "${root_path}"
+	lvcreate --extents '100%FREE' vg1 --name 'root'
+
+	root_path='/dev/vg1/root'
 }
 
 format_disk(){
@@ -317,7 +334,7 @@ install_pacman_packages(){
 
 get_uuid(){
 	root_uuid="$(lsblk "${root_path}" --list --noheadings --nodeps --output 'UUID')"
-	root_uuid_pre_encryption="$(lsblk "${root_path_pre_encryption}" --list --noheadings --nodeps --output 'UUID')"
+	encryption_root_uuid="$(lsblk "${encryption_root_path}" --list --noheadings --nodeps --output 'UUID')"
 }
 
 generate_fstab(){
@@ -385,12 +402,12 @@ configure_grub_install_target(){
 	esac
 }
 
-configure_boot_loader_encryption(){
+configure_boot_options(){
 	if ! "${encrypt_disk}"; then
 		return
 	fi
 
-	boot_options_encryption="cryptdevice=UUID=${root_uuid_pre_encryption}:root"
+	boot_options="cryptdevice=UUID=${encryption_root_uuid}:root"
 }
 
 run_initramfs(){
@@ -431,7 +448,7 @@ install_boot_loader(){
 				linux	/vmlinuz-linux
 				initrd	${systemd_boot_microcode}
 				initrd	/initramfs-linux.img
-				options	${boot_options_encryption} root=UUID=${root_uuid} rw
+				options ${boot_options} root=UUID=${root_uuid} rw
 				options	quiet splash
 				options	sysrq_always_enabled=1
 			EOF
@@ -443,7 +460,7 @@ install_boot_loader(){
 				GRUB_DEFAULT=0
 				GRUB_TIMEOUT=1
 				GRUB_DISTRIBUTOR="Arch"
-				GRUB_CMDLINE_LINUX_DEFAULT="quiet splash sysrq_always_enabled=1 ${boot_options_encryption} root=UUID=${root_uuid} rw"
+				GRUB_CMDLINE_LINUX_DEFAULT="quiet splash sysrq_always_enabled=1 ${boot_options} root=UUID=${root_uuid} rw"
 				GRUB_PRELOAD_MODULES="part_gpt part_msdos"
 				GRUB_TIMEOUT_STYLE=menu
 				GRUB_TERMINAL_INPUT=console
@@ -479,6 +496,7 @@ main(){
 	get_boot_loader
 	ask_clean_disk
 	ask_encrypt_disk
+	ask_setup_lvm
 	get_root_password
 	get_encryption_password
 
@@ -488,6 +506,7 @@ main(){
 	clean_disk
 	partition_disk
 	encrypt_disk
+	setup_lvm
 	format_disk
 	mount_disk
 	install_pacman_packages
@@ -500,7 +519,7 @@ main(){
 	configure_network
 	set_root_password
 	configure_grub_install_target
-	configure_boot_loader_encryption
+	configure_boot_options
 	run_initramfs
 	install_boot_loader
 	finish_and_reboot
