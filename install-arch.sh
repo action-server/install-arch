@@ -32,6 +32,15 @@ ask_yes_no(){
 	fi
 }
 
+source_env(){
+	if ! [ -f './env' ]; then
+		return
+	fi
+
+	. ./env
+
+}
+
 check_root(){
 	if [ "$(id -u)" -ne '0' ]; then
 		print_error 'This script needs root privileges.'
@@ -40,7 +49,7 @@ check_root(){
 }
 
 get_bios_mode(){
-	if [ ! -d /sys/firmware/efi/efivars ]; then
+	if ! [ -d /sys/firmware/efi/efivars ]; then
 		bios_mode='legacy'
 		return
 	fi
@@ -83,7 +92,7 @@ get_timezone(){
 		printf 'Enter the name of your timezone (e.g., Europe/Berlin): '
 		read -r timezone
 
-		if [ ! -f /usr/share/zoneinfo/"${timezone}" ]; then
+		if ! [ -f /usr/share/zoneinfo/"${timezone}" ]; then
 			print_error "The specified timezone was not found."
 			timezone=''
 		fi
@@ -490,6 +499,7 @@ finish_and_reboot(){
 }
 
 main(){
+	source_env
 	check_root
 	get_bios_mode
 	get_cpu_architecture
