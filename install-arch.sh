@@ -99,7 +99,7 @@ get_hostname(){
 
 get_pacman_packages(){
 	while [ -z "${additional_pacman_packages}" ]; do
-		printf 'Enter any additional packages to be installed (e.g., networkmanager vim):'
+		printf 'Enter any additional packages to be installed (e.g., networkmanager vim): '
 		read -r additional_pacman_packages
 
 		if ! sh -c "pacman -Si ${additional_pacman_packages} > /dev/null"; then
@@ -302,6 +302,12 @@ setup_lvm(){
 	lvcreate --extents '100%FREE' vg1 --name 'root'
 
 	root_path='/dev/vg1/root'
+
+	if [ "${filesystem}" != 'ext4' ]; then
+		return
+	fi
+
+	lvreduce --size -256M 'vg1/root'
 }
 
 format_disk(){
