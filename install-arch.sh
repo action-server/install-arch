@@ -97,6 +97,21 @@ get_hostname(){
 	done
 }
 
+get_pacman_packages(){
+	while [ -z "${additional_pacman_packages}" ]; do
+		printf 'Enter any additional packages to be installed (e.g., networkmanager vim):'
+		read -r additional_pacman_packages
+
+		if ! sh -c "pacman -Si ${additional_pacman_packages} > /dev/null"; then
+			print_error "Some packages were not found."
+			additional_pacman_packages=''
+			continue
+		fi
+
+		break
+	done
+}
+
 get_disk_path(){
 	while [ -z "${disk_path}" ]; do
 		lsblk --noheadings --nodeps --output 'PATH'
@@ -296,8 +311,8 @@ mount_disk(){
 	mount "${boot_path}" /mnt/boot
 }
 
-install_essential_packages(){
-	/bin/sh -c "pacstrap -K /mnt ${package_list}"
+install_pacman_packages(){
+	/bin/sh -c "pacstrap -K /mnt ${pacman_packages} ${additional_pacman_packages}"
 }
 
 get_uuid(){
@@ -458,6 +473,7 @@ main(){
 	get_keyboard_layout
 	get_timezone
 	get_hostname
+	get_pacman_packages
 	get_disk_path
 	get_filesystem
 	get_boot_loader
@@ -474,7 +490,7 @@ main(){
 	encrypt_disk
 	format_disk
 	mount_disk
-	install_essential_packages
+	install_pacman_packages
 	get_uuid
 	generate_fstab
 	set_timezone
