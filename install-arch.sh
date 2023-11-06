@@ -34,6 +34,7 @@ ask_yes_no(){
 
 source_env(){
 	if ! [ -f './env' ]; then
+		print_error 'The env file was not found.'
 		return
 	fi
 
@@ -180,6 +181,7 @@ ask_setup_lvm(){
 		return
 	fi
 
+	pacman_packages="${pacman_packages} lvm2"
 	setup_lvm='true'
 }
 
@@ -344,6 +346,46 @@ mount_disk(){
 	mount "${boot_path}" /mnt/boot
 }
 
+configure_cpu_microcode(){
+	case "${cpu_model}" in
+		'intel')
+			pacman_packages="${pacman_packages} intel-ucode"
+			systemd_boot_microcode='/intel-ucode.img'
+			;;
+		'amd')
+			pacman_packages="${pacman_packages} amd-ucode"
+			systemd_boot_microcode='/amd-ucode.img'
+			;;
+	esac
+}
+
+configure_grub_install_target(){
+	if [ "${boot_loader}" != 'grub' ]; then
+		return
+	fi
+
+	case "${cpu_architecture}" in
+		'i386')
+			grub_architecture='i386'
+			;;
+		'x86_64')
+			grub_architecture='x86_64'
+			;;
+	esac
+
+	case "${bios_mode}" in
+		'legacy')
+			grub_install_target='i386-pc'
+			pacman_packages="${pacman_packages} grub"
+			;;
+		'uefi')
+			grub_install_target="${grub_architecture}-efi"
+			grub_install_options='--efi-directory=/boot --bootloader-id=GRUB'
+			pacman_packages="${pacman_packages} grub efibootmgr"
+			;;
+	esac
+}
+
 install_pacman_packages(){
 	/bin/sh -c "pacstrap -K /mnt ${pacman_packages} ${additional_pacman_packages}"
 }
@@ -395,35 +437,12 @@ set_root_password(){
 	arch-chroot /mnt /bin/sh -c "printf '%s' 'root:${root_password}' | chpasswd"
 }
 
-configure_grub_install_target(){
-	case "${cpu_architecture}" in
-		'i386')
-			grub_architecture='i386'
-			;;
-		'x86_64')
-			grub_architecture='x86_64'
-			;;
-	esac
-
-	case "${bios_mode}" in
-		'legacy')
-			grub_install_target='i386-pc'
-			grub_packages='grub'
-			;;
-		'uefi')
-			grub_install_target="${grub_architecture}-efi"
-			grub_install_options='--efi-directory=/boot --bootloader-id=GRUB'
-			grub_packages='grub efibootmgr'
-			;;
-	esac
-}
-
 configure_boot_options(){
 	if ! "${encrypt_disk}"; then
 		return
 	fi
 
-	boot_options="cryptdevice=UUID=${encryption_root_uuid}:root"
+	boot_options="cryptdevice=UUID=${encryption_root_uuid}:root "
 }
 
 run_initramfs(){
@@ -438,17 +457,6 @@ run_initramfs(){
 }
 
 install_boot_loader(){
-	case "${cpu_model}" in
-		'intel')
-			arch-chroot /mnt /bin/sh -c 'pacman -Sy --noconfirm intel-ucode'
-			systemd_boot_microcode='/intel-ucode.img'
-			;;
-		'amd')
-			arch-chroot /mnt /bin/sh -c 'pacman -Sy --noconfirm amd-ucode'
-			systemd_boot_microcode='/amd-ucode.img'
-			;;
-	esac
-
 	case "${boot_loader}" in
 		'systemd-boot')
 			arch-chroot /mnt /bin/sh -c 'bootctl install'
@@ -464,19 +472,17 @@ install_boot_loader(){
 				linux	/vmlinuz-linux
 				initrd	${systemd_boot_microcode}
 				initrd	/initramfs-linux.img
-				options ${boot_options} root=UUID=${root_uuid} rw
+				options ${boot_options}root=UUID=${root_uuid} rw
 				options	quiet splash
 				options	sysrq_always_enabled=1
 			EOF
 			;;
 		'grub')
-			arch-chroot /mnt /bin/sh -c "pacman -Sy --noconfirm ${grub_packages}"
-
 			cat <<- EOF > /mnt/etc/default/grub
 				GRUB_DEFAULT=0
 				GRUB_TIMEOUT=1
 				GRUB_DISTRIBUTOR="Arch"
-				GRUB_CMDLINE_LINUX_DEFAULT="quiet splash sysrq_always_enabled=1 ${boot_options} root=UUID=${root_uuid} rw"
+				GRUB_CMDLINE_LINUX_DEFAULT="quiet splash sysrq_always_enabled=1 ${boot_options}root=UUID=${root_uuid} rw"
 				GRUB_PRELOAD_MODULES="part_gpt part_msdos"
 				GRUB_TIMEOUT_STYLE=menu
 				GRUB_TERMINAL_INPUT=console
@@ -526,6 +532,8 @@ main(){
 	setup_lvm
 	format_disk
 	mount_disk
+	configure_cpu_microcode
+	configure_grub_install_target
 	install_pacman_packages
 	get_uuid
 	generate_fstab
@@ -535,7 +543,6 @@ main(){
 	set_vconsole
 	configure_network
 	set_root_password
-	configure_grub_install_target
 	configure_boot_options
 	run_initramfs
 	install_boot_loader
