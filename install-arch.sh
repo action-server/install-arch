@@ -80,24 +80,26 @@ get_keyboard_layout(){
 	while [ -z "${keyboard_layout}" ]; do
 		printf 'Enter the desired keyboard layout (e.g., us): '
 		read -r keyboard_layout
-
-		if ! loadkeys --quiet --parse "${keyboard_layout}"; then
-			print_error 'Keyboard layout not found'
-			keyboard_layout=''
-		fi
 	done
+
+	if ! loadkeys --quiet --parse "${keyboard_layout}"; then
+		print_error 'Keyboard layout not found'
+		keyboard_layout=''
+		get_keyboard_layout
+	fi
 }
 
 get_timezone(){
 	while [ -z "${timezone}" ]; do
 		printf 'Enter the name of your timezone (e.g., Europe/Berlin): '
 		read -r timezone
-
-		if ! [ -f /usr/share/zoneinfo/"${timezone}" ]; then
-			print_error "The specified timezone was not found."
-			timezone=''
-		fi
 	done
+
+	if ! [ -f /usr/share/zoneinfo/"${timezone}" ]; then
+		print_error 'The specified timezone was not found.'
+		timezone=''
+		get_timezone
+	fi
 }
 
 get_hostname(){
@@ -111,37 +113,36 @@ get_pacman_packages(){
 	while [ -z "${additional_pacman_packages}" ]; do
 		printf 'Enter any additional packages to be installed (e.g., networkmanager vim): '
 		read -r additional_pacman_packages
-
-		if ! sh -c "pacman -Si ${additional_pacman_packages} > /dev/null"; then
-			print_error "Some packages were not found."
-			additional_pacman_packages=''
-			continue
-		fi
-
-		break
 	done
+
+	if ! sh -c "pacman -Si ${additional_pacman_packages} > /dev/null"; then
+		print_error 'Some packages were not found.'
+		additional_pacman_packages=''
+		get_pacman_packages
+	fi
 }
 
 get_disk_path(){
 	while [ -z "${disk_path}" ]; do
-		lsblk --noheadings --nodeps --output 'PATH'
+		lsblk --nodeps --output 'PATH,SIZE'
 		printf 'Enter the path of the desired disk to be affected (e.g., /dev/sda): '
 		read -r disk_path
-
-		if ! [ -b "${disk_path}" ]; then
-			print_error 'Disk not found.'
-			disk_path=''
-		fi
 	done
+
+	if ! [ -b "${disk_path}" ]; then
+		print_error 'Disk not found.'
+		disk_path=''
+		get_disk_path
+	fi
 }
 
 get_filesystem(){
 	options=$(\
-	cat <<-EOF
+		cat <<-EOF
 		ext4
 		btrfs
 		f2fs
-	EOF
+		EOF
 	)
 
 	while ! printf '%s' "${options}" | grep -q "^${filesystem}$"; do
@@ -153,10 +154,10 @@ get_filesystem(){
 
 get_boot_loader(){
 	options=$(\
-	cat <<-EOF
+		cat <<-EOF
 		systemd-boot
 		grub
-	EOF
+		EOF
 	)
 
 	while ! printf '%s' "${options}" | grep -q "^${boot_loader}$"; do
@@ -212,13 +213,14 @@ get_root_password(){
 		read -r root_confirm_password
 		stty echo
 		printf '\n'
-
-		if [ "${root_password}" != "${root_confirm_password}" ]; then
-			print_error 'Password did not match.'
-			root_password=''
-			root_confirm_password=''
-		fi
 	done
+
+	if [ "${root_password}" != "${root_confirm_password}" ]; then
+		print_error 'Password did not match.'
+		root_password=''
+		root_confirm_password=''
+		get_root_password
+	fi
 }
 
 get_encryption_password(){
@@ -243,13 +245,14 @@ get_encryption_password(){
 		read -r encryption_confirm_password
 		stty echo
 		printf '\n'
-
-		if [ "${encryption_password}" != "${encryption_confirm_password}" ]; then
-			print_error 'Password did not match.'
-			encryption_password=''
-			encryption_confirm_password=''
-		fi
 	done
+
+	if [ "${encryption_password}" != "${encryption_confirm_password}" ]; then
+		print_error 'Encryption password did not match.'
+		encryption_password=''
+		encryption_confirm_password=''
+		get_encryption_password
+	fi
 }
 
 set_keyboard_layout(){
