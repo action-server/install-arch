@@ -183,6 +183,7 @@ ask_setup_lvm(){
 	fi
 
 	pacman_packages="${pacman_packages} lvm2"
+	mkinitcpio_lvm_hook='lvm2 '
 	setup_lvm='true'
 }
 
@@ -192,6 +193,7 @@ ask_encrypt_disk(){
 		return
 	fi
 
+	mkinitcpio_encryption_hook='encrypt '
 	encrypt_disk='true'
 }
 
@@ -453,7 +455,7 @@ run_initramfs(){
 		MODULES=()
 		BINARIES=()
 		FILES=()
-		HOOKS=(${mkinitcpio_hooks})
+		HOOKS=(base udev keyboard autodetect modconf kms keymap consolefont block ${mkinitcpio_encryption_hook}${mkinitcpio_lvm_hook}filesystems resume fsck)
 	EOF
 
 	arch-chroot /mnt /bin/sh -c 'mkinitcpio -P || true'
