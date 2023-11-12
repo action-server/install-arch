@@ -36,16 +36,6 @@ ask_yes_no(){
 	fi
 }
 
-source_env(){
-	if ! [ -f './env' ]; then
-		print_error 'The env file was not found.'
-		return
-	fi
-
-	. ./env
-
-}
-
 check_root(){
 	if [ "$(id -u)" -ne '0' ]; then
 		print_error 'This script needs root privileges.'
@@ -81,63 +71,74 @@ get_cpu_model(){
 }
 
 get_keyboard_layout(){
-	while [ -z "${keyboard_layout}" ]; do
+	while true; do
 		printf 'Enter the desired keyboard layout (e.g., us): '
 		read -r keyboard_layout
-	done
 
-	if ! loadkeys --quiet --parse "${keyboard_layout}"; then
-		print_error 'Keyboard layout not found'
-		keyboard_layout=''
-		get_keyboard_layout
-	fi
+		if ! loadkeys --quiet --parse "${keyboard_layout}"; then
+			print_error 'Keyboard layout not found'
+			continue
+		fi
+
+		break
+	done
 }
 
 get_timezone(){
-	while [ -z "${timezone}" ]; do
+	while true; do
 		printf 'Enter the name of your timezone (e.g., Europe/Berlin): '
 		read -r timezone
-	done
 
-	if ! [ -f /usr/share/zoneinfo/"${timezone}" ]; then
-		print_error 'The specified timezone was not found.'
-		timezone=''
-		get_timezone
-	fi
+		if ! [ -f /usr/share/zoneinfo/"${timezone}" ]; then
+			print_error 'The specified timezone was not found.'
+			continue
+		fi
+
+		break
+	done
 }
 
 get_hostname(){
-	while [ -z "${hostname}" ]; do
+	while true; do
 		printf 'Enter hostname: '
 		read -r hostname
+
+		if [ -z "${hostname}" ]; then
+			print_error 'Hostname can not be empty.'
+			continue
+		fi
+
+		break
 	done
 }
 
 get_pacman_packages(){
-	while [ -z "${additional_pacman_packages}" ]; do
+	while true; do
 		printf 'Enter any additional packages to be installed (e.g., networkmanager vim): '
 		read -r additional_pacman_packages
-	done
 
-	if ! sh -c "pacman -Si ${additional_pacman_packages} > /dev/null"; then
-		print_error 'Some packages were not found.'
-		additional_pacman_packages=''
-		get_pacman_packages
-	fi
+		if ! sh -c "pacman -Si ${additional_pacman_packages} > /dev/null"; then
+			print_error 'Some packages were not found.'
+			continue
+		fi
+
+		break
+	done
 }
 
 get_disk_path(){
-	while [ -z "${disk_path}" ]; do
+	while true; do
 		lsblk --nodeps --output 'PATH,SIZE'
 		printf 'Enter the path of the desired disk to be affected (e.g., /dev/sda): '
 		read -r disk_path
-	done
 
-	if ! [ -b "${disk_path}" ]; then
-		print_error 'Disk not found.'
-		disk_path=''
-		get_disk_path
-	fi
+		if ! [ -b "${disk_path}" ]; then
+			print_error 'Disk not found.'
+			continue
+		fi
+
+		break
+	done
 }
 
 get_filesystem(){
@@ -149,10 +150,17 @@ get_filesystem(){
 		EOF
 	)
 
-	while ! printf '%s' "${options}" | grep -q "^${filesystem}$"; do
+	while true; do
 		printf '%s\n' "${options}"
 		printf '%s' 'Choose filesystems: '
 		read -r filesystem
+
+		if ! printf '%s' "${options}" | grep -q "^${filesystem}$"; then
+			print_error 'Wrong filesystem.'
+			continue
+		fi
+
+		break
 	done
 }
 
@@ -164,10 +172,17 @@ get_boot_loader(){
 		EOF
 	)
 
-	while ! printf '%s' "${options}" | grep -q "^${boot_loader}$"; do
+	while true; do
 		printf '%s\n' "${options}"
 		printf '%s' 'Choose boot method: '
 		read -r boot_loader
+
+		if ! printf '%s' "${options}" | grep -q "^${boot_loader}$"; then
+			print_error 'Wrong boot loader.'
+			continue
+		fi
+
+		break
 	done
 }
 
@@ -202,7 +217,7 @@ ask_encrypt_disk(){
 }
 
 get_root_password(){
-	while [ -z "${root_password}" ]; do
+	while true; do
 		printf 'Enter root password: '
 		stty -echo
 		read -r root_password
@@ -210,7 +225,7 @@ get_root_password(){
 		printf '\n'
 
 		if [ -z "${root_password}" ]; then
-			print_error 'Password cannot be empty.'
+			print_error 'Password can not be empty.'
 			continue
 		fi
 
@@ -219,14 +234,14 @@ get_root_password(){
 		read -r root_confirm_password
 		stty echo
 		printf '\n'
-	done
 
-	if [ "${root_password}" != "${root_confirm_password}" ]; then
-		print_error 'Password did not match.'
-		root_password=''
-		root_confirm_password=''
-		get_root_password
-	fi
+		if [ "${root_password}" != "${root_confirm_password}" ]; then
+			print_error 'Password did not match.'
+			continue
+		fi
+
+		break
+	done
 }
 
 get_encryption_password(){
@@ -234,7 +249,7 @@ get_encryption_password(){
 		return
 	fi
 
-	while [ -z "${encryption_password}" ]; do
+	while true; do
 		printf 'Enter encryption password: '
 		stty -echo
 		read -r encryption_password
@@ -251,14 +266,14 @@ get_encryption_password(){
 		read -r encryption_confirm_password
 		stty echo
 		printf '\n'
-	done
 
-	if [ "${encryption_password}" != "${encryption_confirm_password}" ]; then
-		print_error 'Encryption password did not match.'
-		encryption_password=''
-		encryption_confirm_password=''
-		get_encryption_password
-	fi
+		if [ "${encryption_password}" != "${encryption_confirm_password}" ]; then
+			print_error 'Encryption password did not match.'
+			continue
+		fi
+
+		break
+	done
 }
 
 set_keyboard_layout(){
@@ -514,7 +529,6 @@ finish_and_reboot(){
 }
 
 main(){
-	source_env
 	check_root
 	get_bios_mode
 	get_cpu_architecture
