@@ -4,6 +4,10 @@
 # License:      GNU GPLv3
 # Description:  Arch install script
 
+locale='en_US.UTF-8'
+locale_gen='en_US.UTF-8 UTF-8'
+pacman_packages='base linux linux-firmware'
+
 set -e
 
 trap 'cleanup' EXIT INT QUIT TERM HUP
