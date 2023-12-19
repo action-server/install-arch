@@ -224,7 +224,7 @@ ask_swap_file_size(){
 		printf 'Enter swap file size in gigabyte (e.g. 4): '
 		read -r swap_file_size
 
-		if ! printf '%s' "${swap_file_size}" | grep '^[0-9]\+$'; then
+		if ! printf '%s' "${swap_file_size}" | grep -q '^[0-9]\+$'; then
 			print_error 'Swap file size is incorrect.'
 			continue
 		fi
