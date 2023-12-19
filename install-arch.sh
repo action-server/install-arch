@@ -455,7 +455,7 @@ setup_btrfs_swap_file(){
 	btrfs filesystem mkswapfile --size "${swap_file_size}g" --uuid clear /mnt/swap/swapfile
 	swapon /mnt/swap/swapfile
 	swap_file_offset="$(btrfs inspect-internal map-swapfile -r /mnt/swap/swapfile)"
-	swap_boot_options="resume=UUID=${root_uuid} resume_offset=${swap_file_offset}"
+	swap_boot_options=" resume=UUID=${root_uuid} resume_offset=${swap_file_offset}"
 }
 
 setup_swap_file(){
@@ -473,7 +473,7 @@ setup_swap_file(){
 	mkswap --uuid clear /mnt/swapfile
 	swapon /mnt/swapfile
 	swap_file_offset="$(filefrag -v /mnt/swapfile | awk '$1=="0:" {print substr($4, 1, length($4)-2)}')"
-	swap_boot_options="resume=UUID=${root_uuid} resume_offset=${swap_file_offset}"
+	swap_boot_options=" resume=UUID=${root_uuid} resume_offset=${swap_file_offset}"
 }
 
 generate_fstab(){
@@ -627,11 +627,11 @@ main(){
 	setup_lvm
 	format_disk
 	mount_disk
-	setup_swap_file
 	configure_cpu_microcode
 	configure_grub_install_target
 	install_pacman_packages
 	get_uuid
+	setup_swap_file
 	generate_fstab
 	set_timezone
 	set_hardware_clock
