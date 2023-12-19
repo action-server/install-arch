@@ -9,7 +9,6 @@ locale_gen='en_US.UTF-8 UTF-8'
 pacman_packages='base linux linux-firmware'
 
 set -e
-
 trap 'cleanup' EXIT INT QUIT TERM HUP
 
 print_error(){
@@ -26,6 +25,7 @@ cleanup(){
 ask_yes_no(){
 	answer="${1}"
 	question="${2}"
+
 	while ! printf '%s' "${answer}" | grep -q '^\([Yy]\(es\)\?\|[Nn]\(o\)\?\)$'; do
 		printf '%s' "${question} [Y]es/[N]o: "
 		read -r answer
@@ -333,6 +333,10 @@ encrypt_disk(){
 }
 
 setup_lvm(){
+	if ! "${setup_lvm}"; then
+		return
+	fi
+
 	pvcreate "${root_path}"
 	vgcreate 'vg1' "${root_path}"
 	lvcreate --extents '100%FREE' vg1 --name 'root'
