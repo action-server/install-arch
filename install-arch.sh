@@ -206,6 +206,33 @@ ask_setup_lvm(){
 	setup_lvm='true'
 }
 
+ask_swap_file(){
+	if ! ask_yes_no "${setup_swap_file}" 'Do you want a swap file?'; then
+		setup_swap_file='false'
+		return
+	fi
+
+	setup_swap_file='true'
+}
+
+ask_swap_file_size(){
+	if ! "${setup_swap_file}"; then
+		return
+	fi
+
+	while true; do
+		printf 'Enter swap file size in gigabyte (e.g. 4)'
+		read -r swap_file_size
+
+		if ! printf '%s' "${swap_file_size}" | grep '^[0-9]\+$'; then
+			print_error 'Swap file size is incorrect.'
+			continue
+		fi
+
+		break
+	done
+}
+
 ask_encrypt_disk(){
 	if ! ask_yes_no "${encrypt_disk}" 'Do you want encryption?'; then
 		encrypt_disk='false'
@@ -423,6 +450,32 @@ get_uuid(){
 	encryption_root_uuid="$(lsblk "${encryption_root_path}" --list --noheadings --nodeps --output 'UUID')"
 }
 
+setup_btrfs_swap_file(){
+	btrfs subvolume create /mnt/swap
+	btrfs filesystem mkswapfile --size "${swap_file_size}g" --uuid clear /mnt/swap/swapfile
+	swapon /mnt/swap/swapfile
+	swap_file_offset="$(btrfs inspect-internal map-swapfile -r /mnt/swap/swapfile)"
+	swap_boot_options="resume=UUID=${root_uuid} resume_offset=${swap_file_offset}"
+}
+
+setup_swap_file(){
+	if ! "${setup_swap_file}"; then
+		return
+	fi
+
+	if printf '%s' "${filesystem}" | grep 'btrfs'; then
+		setup_btrfs_swap_file
+		return
+	fi
+
+	dd if=/dev/zero of=/mnt/swapfile bs=1M count="${swap_file_size}k" status=progress || true
+	chmod 0600 /mnt/swapfile
+	mkswap --uuid clear /mnt/swapfile
+	swapon /mnt/swapfile
+	swap_file_offset="$(filefrag -v /mnt/swapfile | awk '$1=="0:" {print substr($4, 1, length($4)-2)}')"
+	swap_boot_options="resume=UUID=${root_uuid} resume_offset=${swap_file_offset}"
+}
+
 generate_fstab(){
 	genfstab -U /mnt >> /mnt/etc/fstab
 
@@ -470,7 +523,7 @@ configure_boot_options(){
 		return
 	fi
 
-	boot_options="cryptdevice=UUID=${encryption_root_uuid}:root "
+	boot_options="cryptdevice=UUID=${encryption_root_uuid}:root:allow-discards,no-read-workqueue,no-write-workqueue "
 }
 
 run_initramfs(){
@@ -500,7 +553,7 @@ install_boot_loader(){
 				linux	/vmlinuz-linux
 				initrd	${systemd_boot_microcode}
 				initrd	/initramfs-linux.img
-				options ${boot_options}root=UUID=${root_uuid} rw
+				options ${boot_options}root=UUID=${root_uuid} rw${swap_boot_options}
 				options	quiet splash
 				options	sysrq_always_enabled=1
 			EOF
@@ -510,7 +563,7 @@ install_boot_loader(){
 				GRUB_DEFAULT=0
 				GRUB_TIMEOUT=1
 				GRUB_DISTRIBUTOR="Arch"
-				GRUB_CMDLINE_LINUX_DEFAULT="quiet splash sysrq_always_enabled=1 ${boot_options}root=UUID=${root_uuid} rw"
+				GRUB_CMDLINE_LINUX_DEFAULT="quiet splash sysrq_always_enabled=1 ${boot_options}root=UUID=${root_uuid} rw${swap_boot_options}"
 				GRUB_PRELOAD_MODULES="part_gpt part_msdos"
 				GRUB_TIMEOUT_STYLE=menu
 				GRUB_TERMINAL_INPUT=console
@@ -547,6 +600,8 @@ main(){
 	ask_clean_disk
 	ask_encrypt_disk
 	ask_setup_lvm
+	ask_swap_file
+	ask_swap_file_size
 	get_root_password
 	get_encryption_password
 
@@ -559,6 +614,7 @@ main(){
 	setup_lvm
 	format_disk
 	mount_disk
+	setup_swap_file
 	configure_cpu_microcode
 	configure_grub_install_target
 	install_pacman_packages
