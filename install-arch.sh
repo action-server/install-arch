@@ -221,7 +221,7 @@ ask_swap_file_size(){
 	fi
 
 	while true; do
-		printf 'Enter swap file size in gigabyte (e.g. 4)'
+		printf 'Enter swap file size in gigabyte (e.g. 4): '
 		read -r swap_file_size
 
 		if ! printf '%s' "${swap_file_size}" | grep '^[0-9]\+$'; then
@@ -578,6 +578,19 @@ install_boot_loader(){
 	esac
 }
 
+unmount_swap(){
+	if ! [ "${setup_swap_file}" ]; then
+		return
+	fi
+
+	if printf '%s' "${filesystem}" | grep 'btrfs'; then
+		swapoff /mnt/swap/swapfile
+		return
+	fi
+
+	swapoff /mnt/swapfile
+}
+
 finish_and_reboot(){
 	umount -R /mnt
 	printf '%s' 'Rebooting system in 5 seconds...'
@@ -629,6 +642,7 @@ main(){
 	configure_boot_options
 	run_initramfs
 	install_boot_loader
+	unmount_swap
 	finish_and_reboot
 }
 
