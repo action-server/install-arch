@@ -312,8 +312,8 @@ update_system_clock(){
 }
 
 unmount_disk(){
-	swapoff /mnt/swapfile || tru
-	swapoff /mnt/swap/swapfile || tru
+	swapoff /mnt/swapfile || true
+	swapoff /mnt/swap/swapfile || true
 	umount -R /mnt || true
 	vgremove --yes vg1 || true
 	cryptsetup close root || true
