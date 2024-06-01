@@ -473,6 +473,11 @@ install_pacman_packages(){
 
 get_uuid(){
 	root_uuid="$(lsblk "${root_path}" --list --noheadings --nodeps --output 'UUID')"
+
+	if ! "${encrypt_disk}"; then
+		return
+	fi
+
 	encryption_root_uuid="$(lsblk "${encryption_root_path}" --list --noheadings --nodeps --output 'UUID')"
 }
 
