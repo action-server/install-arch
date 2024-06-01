@@ -304,14 +304,20 @@ get_encryption_password(){
 }
 
 set_keyboard_layout(){
+	echo 'Running: set_keyboard_layout'
+
 	loadkeys "${keyboard_layout}"
 }
 
 update_system_clock(){
+	echo 'Running: update_system_clock'
+
 	timedatectl set-ntp true
 }
 
 unmount_disk(){
+	echo 'Running: unmount_disk'
+
 	swapoff /mnt/swapfile || true
 	swapoff /mnt/swap/swapfile || true
 	umount -R /mnt || true
@@ -320,6 +326,8 @@ unmount_disk(){
 }
 
 clean_disk(){
+	echo 'Running: clean_disk'
+
 	if ! "${clean_disk}"; then
 		return
 	fi
@@ -328,6 +336,8 @@ clean_disk(){
 }
 
 partition_disk(){
+	echo 'Running: partition_disk'
+
 	case "${bios_mode}" in
 		'legacy')
 			sfdisk --wipe-partitions always "${disk_path}" <<- EOF
@@ -350,6 +360,8 @@ partition_disk(){
 }
 
 encrypt_disk(){
+	echo 'Running: encrypt_disk'
+
 	if ! "${encrypt_disk}"; then
 		return
 	fi
@@ -362,6 +374,8 @@ encrypt_disk(){
 }
 
 setup_lvm(){
+	echo 'Running: setup_lvm'
+
 	if ! "${setup_lvm}"; then
 		return
 	fi
@@ -380,6 +394,8 @@ setup_lvm(){
 }
 
 format_disk(){
+	echo 'Running: format_disk'
+
 	mkfs.fat -F32 "${boot_path}"
 
 	case "${filesystem}" in
@@ -398,12 +414,16 @@ format_disk(){
 }
 
 mount_disk(){
+	echo 'Running: mount_disk'
+
 	mount --options "${root_mount_options}" "${root_path}" /mnt
 	mkdir /mnt/boot
 	mount "${boot_path}" /mnt/boot
 }
 
 configure_cpu_microcode(){
+	echo 'Running: configure_cpu_microcode'
+
 	case "${cpu_model}" in
 		'intel')
 			pacman_packages="${pacman_packages} intel-ucode"
@@ -417,6 +437,8 @@ configure_cpu_microcode(){
 }
 
 configure_grub_install_target(){
+	echo 'Running: configure_grub_install_target'
+
 	if [ "${boot_loader}" != 'grub' ]; then
 		return
 	fi
@@ -444,6 +466,8 @@ configure_grub_install_target(){
 }
 
 install_pacman_packages(){
+	echo 'Running: install_pacman_packages'
+
 	/bin/sh -c "pacstrap -K /mnt ${pacman_packages} ${additional_pacman_packages}"
 }
 
@@ -453,6 +477,8 @@ get_uuid(){
 }
 
 setup_btrfs_swap_file(){
+	echo 'Running: setup_btrfs_swap_file'
+
 	btrfs subvolume create /mnt/swap
 	btrfs filesystem mkswapfile --size "${swap_file_size}g" --uuid clear /mnt/swap/swapfile
 	swapon /mnt/swap/swapfile
@@ -461,6 +487,8 @@ setup_btrfs_swap_file(){
 }
 
 setup_swap_file(){
+	echo 'Running: setup_swap_file'
+
 	if ! "${setup_swap_file}"; then
 		return
 	fi
@@ -479,6 +507,8 @@ setup_swap_file(){
 }
 
 generate_fstab(){
+	echo 'Running: generate_fstab'
+
 	genfstab -U /mnt >> /mnt/etc/fstab
 
 	cat <<- EOF >> /mnt/etc/fstab
@@ -489,24 +519,34 @@ generate_fstab(){
 }
 
 set_timezone(){
+	echo 'Running: set_timezone'
+
 	arch-chroot /mnt /bin/sh -c "ln -sf /usr/share/zoneinfo/${timezone} /etc/localtime"
 }
 
 set_hardware_clock(){
+	echo 'Running: set_hardware_clock'
+
 	arch-chroot /mnt /bin/sh -c 'hwclock --systohc'
 }
 
 set_locale(){
+	echo 'Running: set_locale'
+
 	printf '%s' "${locale_gen}" > /mnt/etc/locale.gen
 	arch-chroot /mnt /bin/sh -c 'locale-gen'
 	printf '%s' "LANG=${locale}" > /mnt/etc/locale.conf
 }
 
 set_vconsole(){
+	echo 'Running: set_vconsole'
+
 	printf '%s' "KEYMAP=${keyboard_layout}" > /mnt/etc/vconsole.conf
 }
 
 configure_network(){
+	echo 'Running: configure_network'
+
 	printf '%s' "${hostname}" > /mnt/etc/hostname
 
 	cat <<- EOF > /mnt/etc/hosts
@@ -517,10 +557,14 @@ configure_network(){
 }
 
 set_root_password(){
+	echo 'Running: set_root_password'
+
 	arch-chroot /mnt /bin/sh -c "printf '%s' 'root:${root_password}' | chpasswd"
 }
 
 configure_boot_options(){
+	echo 'Running: configure_boot_options'
+
 	if ! "${encrypt_disk}"; then
 		return
 	fi
@@ -529,6 +573,8 @@ configure_boot_options(){
 }
 
 run_initramfs(){
+	echo 'Running: run_initramfs'
+
 	cat <<- EOF > /mnt/etc/mkinitcpio.conf
 		MODULES=()
 		BINARIES=()
@@ -540,6 +586,8 @@ run_initramfs(){
 }
 
 install_boot_loader(){
+	echo 'Running: install_boot_loader'
+
 	case "${boot_loader}" in
 		'systemd-boot')
 			arch-chroot /mnt /bin/sh -c 'bootctl install'
@@ -581,6 +629,8 @@ install_boot_loader(){
 }
 
 unmount_swap(){
+	echo 'Running: unmount_swap'
+
 	if ! [ "${setup_swap_file}" ]; then
 		return
 	fi
@@ -594,6 +644,8 @@ unmount_swap(){
 }
 
 finish_and_reboot(){
+	echo 'Running: finish_and_reboot'
+
 	umount -R /mnt
 	printf '%s' 'Rebooting system in 5 seconds...'
 	sleep 5
