@@ -641,11 +641,11 @@ unmount_swap(){
 	fi
 
 	if printf '%s' "${filesystem}" | grep 'btrfs'; then
-		swapoff /mnt/swap/swapfile
+		swapoff /mnt/swap/swapfile || true
 		return
 	fi
 
-	swapoff /mnt/swapfile
+	swapoff /mnt/swapfile || true
 }
 
 finish_and_reboot(){
