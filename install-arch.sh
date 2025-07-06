@@ -52,15 +52,6 @@ get_bios_mode(){
 	bios_mode='uefi'
 }
 
-get_cpu_architecture(){
-	if ! grep --quiet '\slm\s' /proc/cpuinfo; then
-		cpu_architecture='i386'
-		return
-	fi
-
-	cpu_architecture='x86_64'
-}
-
 get_cpu_model(){
 	if ! grep --quiet 'Intel' /proc/cpuinfo; then
 		cpu_model='amd'
@@ -443,22 +434,13 @@ configure_grub_install_target(){
 		return
 	fi
 
-	case "${cpu_architecture}" in
-		'i386')
-			grub_architecture='i386'
-			;;
-		'x86_64')
-			grub_architecture='x86_64'
-			;;
-	esac
-
 	case "${bios_mode}" in
 		'legacy')
 			grub_install_target='i386-pc'
 			pacman_packages="${pacman_packages} grub"
 			;;
 		'uefi')
-			grub_install_target="${grub_architecture}-efi"
+			grub_install_target="x86_64-efi"
 			grub_install_options='--efi-directory=/boot --bootloader-id=GRUB'
 			pacman_packages="${pacman_packages} grub efibootmgr"
 			;;
@@ -660,7 +642,6 @@ finish_and_reboot(){
 main(){
 	check_root
 	get_bios_mode
-	get_cpu_architecture
 	get_cpu_model
 	get_keyboard_layout
 	get_timezone
