@@ -62,74 +62,54 @@ get_cpu_model(){
 }
 
 get_keyboard_layout(){
-	while true; do
-		printf 'Enter the desired keyboard layout (e.g., us): '
-		read -r keyboard_layout
+	printf 'Enter the desired keyboard layout (e.g., us): '
+	read -r keyboard_layout
 
-		if ! loadkeys --quiet --parse "${keyboard_layout}"; then
-			print_error 'Keyboard layout not found'
-			continue
-		fi
-
-		break
-	done
+	if ! loadkeys --quiet --parse "${keyboard_layout}"; then
+		print_error 'Keyboard layout not found'
+		get_keyboard_layout
+	fi
 }
 
 get_timezone(){
-	while true; do
-		printf 'Enter the name of your timezone (e.g., Europe/Berlin): '
-		read -r timezone
+	printf 'Enter the name of your timezone (e.g., Europe/Berlin): '
+	read -r timezone
 
-		if ! [ -f /usr/share/zoneinfo/"${timezone}" ]; then
-			print_error 'The specified timezone was not found.'
-			continue
-		fi
-
-		break
-	done
+	if ! [ -f /usr/share/zoneinfo/"${timezone}" ]; then
+		print_error 'The specified timezone was not found.'
+		get_timezone
+	fi
 }
 
 get_hostname(){
-	while true; do
-		printf 'Enter hostname: '
-		read -r hostname
+	printf 'Enter hostname: '
+	read -r hostname
 
-		if [ -z "${hostname}" ]; then
-			print_error 'Hostname can not be empty.'
-			continue
-		fi
-
-		break
-	done
+	if [ -z "${hostname}" ]; then
+		print_error 'Hostname can not be empty.'
+		get_hostname
+	fi
 }
 
 get_pacman_packages(){
-	while true; do
-		printf 'Enter any additional packages to be installed (e.g., networkmanager vim): '
-		read -r additional_pacman_packages
+	printf 'Enter any additional packages to be installed (e.g., networkmanager vim): '
+	read -r additional_pacman_packages
 
-		if ! sh -c "pacman -Si ${additional_pacman_packages} > /dev/null"; then
-			print_error 'Some packages were not found.'
-			continue
-		fi
-
-		break
-	done
+	if ! sh -c "pacman -Si ${additional_pacman_packages} > /dev/null"; then
+		print_error 'Some packages were not found.'
+		get_pacman_packages
+	fi
 }
 
 get_disk_path(){
-	while true; do
-		lsblk --nodeps --output 'PATH,SIZE'
-		printf 'Enter the path of the desired disk to be affected (e.g., /dev/sda): '
-		read -r disk_path
+	lsblk --nodeps --output 'PATH,SIZE'
+	printf 'Enter the path of the desired disk to be affected (e.g., /dev/sda): '
+	read -r disk_path
 
-		if ! [ -b "${disk_path}" ]; then
-			print_error 'Disk not found.'
-			continue
-		fi
-
-		break
-	done
+	if ! [ -b "${disk_path}" ]; then
+		print_error 'Disk not found.'
+		get_disk_path
+	fi
 }
 
 get_filesystem(){
@@ -141,18 +121,14 @@ get_filesystem(){
 		EOF
 	)
 
-	while true; do
-		printf '%s\n' "${options}"
-		printf '%s' 'Choose filesystems: '
-		read -r filesystem
+	printf '%s\n' "${options}"
+	printf '%s' 'Choose filesystems: '
+	read -r filesystem
 
-		if ! printf '%s' "${options}" | grep -q "^${filesystem}$"; then
-			print_error 'Wrong filesystem.'
-			continue
-		fi
-
-		break
-	done
+	if ! printf '%s' "${options}" | grep -q "^${filesystem}$"; then
+		print_error 'Wrong filesystem.'
+		get_filesystem
+	fi
 }
 
 get_boot_loader(){
@@ -163,18 +139,14 @@ get_boot_loader(){
 		EOF
 	)
 
-	while true; do
-		printf '%s\n' "${options}"
-		printf '%s' 'Choose boot method: '
-		read -r boot_loader
+	printf '%s\n' "${options}"
+	printf '%s' 'Choose boot method: '
+	read -r boot_loader
 
-		if ! printf '%s' "${options}" | grep -q "^${boot_loader}$"; then
-			print_error 'Wrong boot loader.'
-			continue
-		fi
-
-		break
-	done
+	if ! printf '%s' "${options}" | grep -q "^${boot_loader}$"; then
+		print_error 'Wrong boot loader.'
+		get_boot_loader
+	fi
 }
 
 ask_clean_disk(){
@@ -211,17 +183,13 @@ ask_swap_file_size(){
 		return
 	fi
 
-	while true; do
-		printf 'Enter swap file size in gigabyte (e.g. 4): '
-		read -r swap_file_size
+	printf 'Enter swap file size in gigabyte (e.g. 4): '
+	read -r swap_file_size
 
-		if ! printf '%s' "${swap_file_size}" | grep -q '^[0-9]\+$'; then
-			print_error 'Swap file size is incorrect.'
-			continue
-		fi
-
-		break
-	done
+	if ! printf '%s' "${swap_file_size}" | grep -q '^[0-9]\+$'; then
+		print_error 'Swap file size is incorrect.'
+		ask_swap_file_size
+	fi
 }
 
 ask_encrypt_disk(){
@@ -235,31 +203,28 @@ ask_encrypt_disk(){
 }
 
 get_root_password(){
-	while true; do
-		printf 'Enter root password: '
-		stty -echo
-		read -r root_password
-		stty echo
-		printf '\n'
+	printf 'Enter root password: '
+	stty -echo
+	read -r root_password
+	stty echo
+	printf '\n'
 
-		if [ -z "${root_password}" ]; then
-			print_error 'Password can not be empty.'
-			continue
-		fi
+	if [ -z "${root_password}" ]; then
+		print_error 'Password can not be empty.'
+		get_root_password
+		return
+	fi
 
-		printf 'Confirm root password: '
-		stty -echo
-		read -r root_confirm_password
-		stty echo
-		printf '\n'
+	printf 'Confirm root password: '
+	stty -echo
+	read -r root_confirm_password
+	stty echo
+	printf '\n'
 
-		if [ "${root_password}" != "${root_confirm_password}" ]; then
-			print_error 'Password did not match.'
-			continue
-		fi
-
-		break
-	done
+	if [ "${root_password}" != "${root_confirm_password}" ]; then
+		print_error 'Password did not match.'
+		get_root_password
+	fi
 }
 
 get_encryption_password(){
@@ -267,31 +232,28 @@ get_encryption_password(){
 		return
 	fi
 
-	while true; do
-		printf 'Enter encryption password: '
-		stty -echo
-		read -r encryption_password
-		stty echo
-		printf '\n'
+	printf 'Enter encryption password: '
+	stty -echo
+	read -r encryption_password
+	stty echo
+	printf '\n'
 
-		if [ -z "${encryption_password}" ]; then
-			print_error 'Encryption password cannot be empty.'
-			continue
-		fi
+	if [ -z "${encryption_password}" ]; then
+		print_error 'Encryption password cannot be empty.'
+		get_encryption_password
+		return
+	fi
 
-		printf 'Confirm encryption password: '
-		stty -echo
-		read -r encryption_confirm_password
-		stty echo
-		printf '\n'
+	printf 'Confirm encryption password: '
+	stty -echo
+	read -r encryption_confirm_password
+	stty echo
+	printf '\n'
 
-		if [ "${encryption_password}" != "${encryption_confirm_password}" ]; then
-			print_error 'Encryption password did not match.'
-			continue
-		fi
-
-		break
-	done
+	if [ "${encryption_password}" != "${encryption_confirm_password}" ]; then
+		print_error 'Encryption password did not match.'
+		get_encryption_password
+	fi
 }
 
 set_keyboard_layout(){
