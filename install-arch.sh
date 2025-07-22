@@ -482,21 +482,21 @@ set_hardware_clock(){
 set_locale(){
 	echo 'Running: set_locale'
 
-	printf '%s' "${locale_gen}" > /mnt/etc/locale.gen
+	printf '%s\n' "${locale_gen}" > /mnt/etc/locale.gen
 	arch-chroot /mnt /bin/sh -c 'locale-gen'
-	printf '%s' "LANG=${locale}" > /mnt/etc/locale.conf
+	printf '%s\n' "LANG=${locale}" > /mnt/etc/locale.conf
 }
 
 set_vconsole(){
 	echo 'Running: set_vconsole'
 
-	printf '%s' "KEYMAP=${keyboard_layout}" > /mnt/etc/vconsole.conf
+	printf '%s\n' "KEYMAP=${keyboard_layout}" > /mnt/etc/vconsole.conf
 }
 
 configure_network(){
 	echo 'Running: configure_network'
 
-	printf '%s' "${hostname}" > /mnt/etc/hostname
+	printf '%s\n' "${hostname}" > /mnt/etc/hostname
 
 	cat <<- EOF > /mnt/etc/hosts
 		127.0.0.1	localhost
